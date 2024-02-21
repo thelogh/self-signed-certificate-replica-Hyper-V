@@ -1,0 +1,53 @@
+# PowerShell guide by Thelogh
+#How to set up replication on Hyper-V 2022 [step by step] with Active Directory off-domain self-signed certificates
+#https://www.alldiscoveries.com/how-to-set-up-replication-on-hyper-v-2022-step-by-step-with-active-directory-off-domain-self-signed-certificates
+#For all requests write on the blog
+#REPOSITORY
+#https://github.com/thelogh/self-signed-certificate-replica-Hyper-V
+#V.1.0.0
+#
+
+#WE CREATE THE CA AND IT IS AUTOMATICALLY INCLUDED IN THE LIST OF USABLE CERTIFICATES
+New-SelfSignedCertificate -KeyExportPolicy Exportable -Subject "CN=HyperV-1-CA" -FriendlyName "HyperV-1-CA" -CertStoreLocation "Cert:\LocalMachine\My" -KeySpec "Signature" -KeyUsage "CertSign" -NotAfter (Get-Date).AddYears(20)
+
+#FIND THE "THUMBPRINT"
+Get-ChildItem -Path Cert:\LocalMachine\My
+
+#TO SEE A DETAILED LIST ALSO WITH CERTIFICATE EXPIRIES:
+Get-ChildItem -Path "Cert:\LocalMachine\My" | Select-Object FriendlyName, Thumbprint, Subject, NotBefore, NotAfter, SerialNumber
+
+#TO SEE THE DETAIL OF THE INDIVIDUAL CERTIFICATE WE MUST SPECIFY ITS "THUMBPRINT"
+Get-ChildItem -Path "Cert:\LocalMachine\My" | Where-Object Thumbprint -eq 822DC420C6321D482427C79DB33FAF77D9DDF90A | Select-Object *
+
+#GENERATE THE SERVER CERTIFICATES
+New-SelfSignedCertificate -KeyExportPolicy "Exportable" -Subject "HyperV-1" -CertStoreLocation "Cert:\LocalMachine\My" -KeyUsage "KeyEncipherment", "DigitalSignature" -Signer "Cert:LocalMachine\My\822DC420C6321D482427C79DB33FAF77D9DDF90A" -NotAfter (Get-Date).AddYears(20)
+
+#MOVING CA FROM “MY STORE” TO “ROOT”
+Move-Item -Path "Cert:LocalMachine\My\822DC420C6321D482427C79DB33FAF77D9DDF90A" -Destination "Cert:\LocalMachine\Root"
+
+#EXPORT THE "HYPERV-1" CA
+Export-Certificate -Cert Cert:\LocalMachine\Root\822DC420C6321D482427C79DB33FAF77D9DDF90A -FilePath C:\Users\Administrator\Desktop\certificates\HyperV-1-CA.cer
+
+#GENERATE THE CA
+New-SelfSignedCertificate -KeyExportPolicy Exportable -Subject "CN=HyperV-2-CA" -FriendlyName "HyperV-2-CA" -CertStoreLocation "Cert:\LocalMachine\My" -KeySpec "Signature" -KeyUsage "CertSign" -NotAfter (Get-Date).AddYears(20)
+
+#GENERATE THE SERVER CERTIFICATE
+New-SelfSignedCertificate -KeyExportPolicy "Exportable" -Subject "HyperV-2" -CertStoreLocation "Cert:\LocalMachine\My" -KeyUsage "KeyEncipherment", "DigitalSignature" -Signer "Cert:LocalMachine\My\2F7BAE41F2E57FCA71AB34326FB51491171C6AC8" -NotAfter (Get-Date).AddYears(20)
+
+#MOVE THE CA CERTIFICATE TO THE ROOT
+Move-Item -Path "Cert:LocalMachine\My\2F7BAE41F2E57FCA71AB34326FB51491171C6AC8" -Destination "Cert:\LocalMachine\Root"
+
+#EXPORT THE “HYPERV-2” CA TO A FILE
+Export-Certificate -Cert Cert:\LocalMachine\Root\2F7BAE41F2E57FCA71AB34326FB51491171C6AC8 -FilePath C:\Users\Administrator\Desktop\certificates\HyperV-2-CA.cer
+
+#IMPORT CA TO "HYPERV-1"
+Import-Certificate -CertStoreLocation Cert:\LocalMachine\Root -FilePath HyperV-2-CA.cer
+
+#IMPORT CA TO "HYPERV-2"
+Import-Certificate -CertStoreLocation Cert:\LocalMachine\Root -FilePath HyperV-1-CA.cer
+
+#EXPORT THE CERTIFICATES IN THE PFX FORMAT
+Get-ChildItem -Path Cert:\LocalMachine\Root\822DC420C6321D482427C79DB33FAF77D9DDF90A | Export-PfxCertificate -FilePath HyperV-1-CA.pfx -Password (ConvertTo-SecureString -String '12345678' -AsPlainText -Force)
+
+#IMPORT THE CERTIFICATES IN THE PFX FORMAT
+Import-PfxCertificate -FilePath HyperV-1-CA.pfx -CertStoreLocation Cert:\LocalMachine\Root -Exportable

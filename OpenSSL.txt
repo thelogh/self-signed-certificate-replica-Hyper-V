@@ -1,0 +1,43 @@
+#OpenSSL guide by Thelogh
+#How to set up replication on Hyper-V 2022 [step by step] with Active Directory off-domain self-signed certificates
+#https://www.alldiscoveries.com/how-to-set-up-replication-on-hyper-v-2022-step-by-step-with-active-directory-off-domain-self-signed-certificates
+#For all requests write on the blog
+#REPOSITORY
+#https://github.com/thelogh/self-signed-certificate-replica-Hyper-V
+#V.1.0.0
+#
+
+#GENERATE THE “PRIVATE KEY” (HYPERV-1-CA.KEY)
+openssl genrsa -out HyperV-1-CA.key 2048
+
+#GENERATE THE CERTIFICATE SIGNING REQUEST (CSR)
+openssl req -new -key HyperV-1-CA.key -subj "/CN=HyperV-1-CA" -addext "keyUsage = keyCertSign" -addext "extendedKeyUsage = serverAuth, clientAuth" -out HyperV-1-CA.csr
+
+#VERIFY OUR REQUEST
+openssl req -in HyperV-1-CA.csr -noout -text
+
+#SIGNING THE CERTIFICATE
+openssl x509 -req -days 7300 -in HyperV-1-CA.csr -signkey HyperV-1-CA.key -copy_extensions=copyall -out HyperV-1-CA.crt
+
+#CERTIFICATE WITHOUT FIRST CREATING A CSR:
+openssl req -x509 -new -nodes -key HyperV-1-CA.key -subj "/CN=HyperV-1-CA" -days 7300 -out HyperV-1-CA.crt -addext "keyUsage = keyCertSign" -addext "extendedKeyUsage = serverAuth, clientAuth"
+
+#GENERATE THE PKCS 12 TYPE CERTIFICATE
+openssl pkcs12 -export -inkey HyperV-1-CA.key -in HyperV-1-CA.crt -out HyperV-1-CA.p12
+
+#GENERATE THE SERVER CERTIFICATE "PRIVATE KEY"
+openssl genrsa -out HyperV-1.key 2048
+
+#GENERATE THE CERTIFICATE SIGNING REQUEST (CSR)
+openssl req -new -key HyperV-1.key -subj "/CN=HyperV-1" -addext "keyUsage = digitalSignature, keyEncipherment" -addext "extendedKeyUsage = serverAuth, clientAuth" -out HyperV-1.csr
+
+#CSR VERIFICATION
+openssl req -in HyperV-1.csr -noout -text
+
+#SIGNING THE CERTIFICATE
+openssl x509 -req -in HyperV-1.csr -CA HyperV-1-CA.crt -CAkey HyperV-1-CA.key -CAcreateserial -copy_extensions=copyall -out HyperV-1.crt -days 7300
+
+#GENERATE THE PKCS 12 TYPE
+openssl pkcs12 -export -inkey HyperV-1.key -in HyperV-1.crt -out HyperV-1.p12
+
+
